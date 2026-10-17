@@ -1,0 +1,898 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zara — Emotionally Intelligent Voice AI Platform</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #08090C;
+            --card-bg: #111319;
+            --border-color: #1F2430;
+            --accent-glow: rgba(220, 110, 255, 0.35);
+            --accent-gradient: linear-gradient(135deg, #FF6B97, #8B5CF6);
+            --text-primary: #F3F4F6;
+            --text-secondary: #9CA3AF;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow-x: hidden;
+        }
+
+        /* Why this exists: Emulates the atmospheric glow from modern AI companion web frontends */
+        .ambient-glow {
+            position: fixed;
+            top: 20%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 500px;
+            height: 500px;
+            background: radial-gradient(circle, var(--accent-glow) 0%, rgba(0,0,0,0) 70%);
+            z-index: 0;
+            pointer-events: none;
+            filter: blur(60px);
+        }
+
+        header {
+            position: relative;
+            z-index: 10;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1.25rem 2.5rem;
+            border-bottom: 1px solid var(--border-color);
+            backdrop-filter: blur(12px);
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .brand-logo {
+            width: 34px;
+            height: 34px;
+            border-radius: 10px;
+            background: var(--accent-gradient);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            color: white;
+            font-size: 1.1rem;
+            box-shadow: 0 0 15px rgba(236, 72, 153, 0.4);
+        }
+
+        .brand-name {
+            font-family: 'Playfair Display', serif;
+            font-size: 1.5rem;
+            letter-spacing: -0.02em;
+        }
+
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .btn-memory {
+            background: #1A1E29;
+            border: 1px solid var(--border-color);
+            padding: 0.4rem 0.9rem;
+            border-radius: 999px;
+            font-size: 0.8rem;
+            color: #C084FC;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+            transition: all 0.2s ease;
+        }
+
+        .btn-memory:hover {
+            border-color: #A855F7;
+            background: rgba(168, 85, 247, 0.15);
+        }
+
+        .badge {
+            background: #1A1E29;
+            border: 1px solid var(--border-color);
+            padding: 0.25rem 0.75rem;
+            border-radius: 999px;
+            font-size: 0.75rem;
+            color: #A78BFA;
+            font-weight: 500;
+        }
+
+        main {
+            position: relative;
+            z-index: 10;
+            flex: 1;
+            display: grid;
+            grid-template-columns: 1fr 420px;
+            max-width: 1400px;
+            width: 100%;
+            margin: 0 auto;
+            padding: 2rem 2.5rem;
+            gap: 2rem;
+        }
+
+        @media (max-width: 1024px) {
+            main {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .companion-stage {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 24px;
+            padding: 2.5rem 2rem;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.4);
+        }
+
+        .voice-orb-container {
+            position: relative;
+            width: 200px;
+            height: 200px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 2rem;
+        }
+
+        .voice-orb {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            background: var(--accent-gradient);
+            box-shadow: 0 0 60px rgba(236, 72, 153, 0.5), inset 0 0 30px rgba(255,255,255,0.4);
+            transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+            animation: pulse-slow 4s infinite ease-in-out;
+        }
+
+        .voice-orb.speaking {
+            animation: pulse-active 1.2s infinite ease-in-out;
+            box-shadow: 0 0 90px rgba(168, 85, 247, 0.8), inset 0 0 40px rgba(255,255,255,0.8);
+            transform: scale(1.15);
+        }
+
+        .voice-orb.listening {
+            animation: pulse-listen 1.5s infinite ease-in-out;
+            background: linear-gradient(135deg, #06B6D4, #3B82F6);
+            box-shadow: 0 0 80px rgba(59, 130, 246, 0.7);
+        }
+
+        @keyframes pulse-slow {
+            0%, 100% { transform: scale(1); opacity: 0.9; }
+            50% { transform: scale(1.05); opacity: 1; }
+        }
+
+        @keyframes pulse-active {
+            0%, 100% { transform: scale(1.08); filter: brightness(1.2); }
+            50% { transform: scale(1.22); filter: brightness(1.5); }
+        }
+
+        @keyframes pulse-listen {
+            0%, 100% { transform: scale(1.03); }
+            50% { transform: scale(1.12); }
+        }
+
+        .visualizer-canvas {
+            width: 100%;
+            height: 50px;
+            max-width: 440px;
+            margin-bottom: 1.5rem;
+        }
+
+        .companion-status {
+            font-size: 0.95rem;
+            color: var(--text-secondary);
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #10B981;
+        }
+
+        /* Context and Subtext Banner */
+        .context-pill {
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 0.6rem 1rem;
+            font-size: 0.82rem;
+            color: #94A3B8;
+            max-width: 520px;
+            width: 100%;
+            margin-bottom: 1.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .controls-row {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+            width: 100%;
+            max-width: 520px;
+        }
+
+        .btn-talk {
+            flex: 1;
+            padding: 0.9rem 1.5rem;
+            border-radius: 14px;
+            background: var(--accent-gradient);
+            border: none;
+            color: white;
+            font-weight: 600;
+            font-size: 1rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.75rem;
+            box-shadow: 0 8px 24px rgba(236, 72, 153, 0.3);
+            transition: all 0.2s ease;
+        }
+
+        .btn-talk:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 30px rgba(236, 72, 153, 0.45);
+        }
+
+        .btn-talk.active {
+            background: #EF4444;
+            box-shadow: 0 8px 24px rgba(239, 68, 68, 0.4);
+        }
+
+        .text-input-box {
+            display: flex;
+            width: 100%;
+            max-width: 520px;
+            margin-top: 1rem;
+            background: #181B24;
+            border: 1px solid var(--border-color);
+            border-radius: 14px;
+            overflow: hidden;
+        }
+
+        .text-input-box input {
+            flex: 1;
+            background: transparent;
+            border: none;
+            padding: 0.85rem 1.25rem;
+            color: white;
+            font-family: inherit;
+            font-size: 0.95rem;
+            outline: none;
+        }
+
+        .text-input-box button {
+            background: transparent;
+            border: none;
+            color: #EC4899;
+            padding: 0 1.25rem;
+            cursor: pointer;
+            font-weight: 600;
+        }
+
+        /* Side Panel: Transcript & Settings */
+        .side-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        .panel-card {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 20px;
+            padding: 1.5rem;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .transcript-feed {
+            height: 380px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            padding-right: 0.5rem;
+        }
+
+        .transcript-feed::-webkit-scrollbar {
+            width: 5px;
+        }
+        .transcript-feed::-webkit-scrollbar-thumb {
+            background: #2D3748;
+            border-radius: 10px;
+        }
+
+        .msg-bubble {
+            padding: 0.85rem 1.1rem;
+            border-radius: 16px;
+            font-size: 0.9rem;
+            line-height: 1.5;
+            max-width: 85%;
+        }
+
+        .msg-user {
+            align-self: flex-end;
+            background: #2A1F3D;
+            border: 1px solid rgba(168, 85, 247, 0.3);
+            color: #F3F4F6;
+            border-bottom-right-radius: 4px;
+        }
+
+        .msg-zara {
+            align-self: flex-start;
+            background: #181B24;
+            border: 1px solid var(--border-color);
+            color: #E2E8F0;
+            border-bottom-left-radius: 4px;
+        }
+
+        .emotion-tag {
+            color: #F472B6;
+            font-weight: 600;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85em;
+        }
+
+        .settings-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 1rem;
+        }
+
+        .setting-item label {
+            display: block;
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            margin-bottom: 0.4rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            font-weight: 600;
+        }
+
+        .setting-item select, .setting-item input {
+            width: 100%;
+            background: #181B24;
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 0.65rem 0.85rem;
+            color: white;
+            font-family: inherit;
+            font-size: 0.9rem;
+            outline: none;
+        }
+
+        /* Modal for Mesh Memory */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.7);
+            backdrop-filter: blur(8px);
+            z-index: 100;
+            display: none;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-card {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 20px;
+            width: 90%;
+            max-width: 600px;
+            max-height: 80vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            box-shadow: 0 25px 50px rgba(0,0,0,0.5);
+        }
+
+        .modal-header {
+            padding: 1.25rem 1.5rem;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-body {
+            padding: 1.5rem;
+            overflow-y: auto;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .memory-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #181B24;
+            border: 1px solid var(--border-color);
+            padding: 0.75rem 1rem;
+            border-radius: 12px;
+            font-size: 0.9rem;
+        }
+
+        .memory-cat {
+            font-size: 0.75rem;
+            color: #A855F7;
+            text-transform: uppercase;
+            font-weight: 600;
+            display: block;
+            margin-bottom: 0.2rem;
+        }
+
+        .btn-del {
+            background: transparent;
+            border: none;
+            color: #EF4444;
+            cursor: pointer;
+            font-size: 0.85rem;
+            padding: 0.3rem 0.6rem;
+            border-radius: 6px;
+        }
+        .btn-del:hover {
+            background: rgba(239, 68, 68, 0.15);
+        }
+
+        .modal-footer {
+            padding: 1rem 1.5rem;
+            border-top: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="ambient-glow"></div>
+
+    <header>
+        <div class="brand">
+            <div class="brand-logo">Z</div>
+            <div class="brand-name">Zara</div>
+            <div class="badge">Silk • Mesh • Peek Architecture</div>
+        </div>
+        <div class="header-actions">
+            <button class="btn-memory" id="openMemoryBtn">
+                <span>🧠 Mesh Memory</span>
+                <span id="memoryCountBadge" style="background:#8B5CF6; color:white; border-radius:10px; padding:0 6px; font-size:0.75rem;">0</span>
+            </button>
+            <div class="badge">Clean-Room Voice AI</div>
+        </div>
+    </header>
+
+    <main>
+        <!-- Stage: Voice Orb & Interaction -->
+        <section class="companion-stage">
+            <div class="voice-orb-container">
+                <div class="voice-orb" id="voiceOrb"></div>
+            </div>
+
+            <canvas class="visualizer-canvas" id="waveformCanvas"></canvas>
+
+            <div class="companion-status">
+                <span class="status-dot" id="statusDot"></span>
+                <span id="statusLabel">Zara is listening</span>
+            </div>
+
+            <!-- Peek Context Subtext Banner -->
+            <div class="context-pill" id="contextPill">
+                <span id="contextTemporal">🕒 Late Night Mode (Soft & Calming)</span>
+                <span id="contextSubtext" style="color: #EC4899; font-weight: 500;">Listening for emotional subtext...</span>
+            </div>
+
+            <div class="controls-row">
+                <button class="btn-talk" id="micBtn">
+                    <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
+                        <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
+                    </svg>
+                    <span id="micBtnText">Tap to Talk</span>
+                </button>
+            </div>
+
+            <div class="text-input-box">
+                <input type="text" id="textInput" placeholder="Say something or test Hinglish ('Yaar, feeling tired today...')" autocomplete="off" />
+                <button id="sendBtn">Send</button>
+            </div>
+        </section>
+
+        <!-- Sidebar: Feed & Parameters -->
+        <aside class="side-panel">
+            <div class="panel-card" style="flex: 1;">
+                <h3 style="font-size: 1rem; margin-bottom: 1rem; color: #E2E8F0; display:flex; justify-content:space-between;">
+                    <span>Dialogue Transcript</span>
+                    <span style="font-size: 0.8rem; color: #94A3B8; font-weight: normal;">Live Audio Stream</span>
+                </h3>
+                <div class="transcriptFeed" id="transcriptFeed">
+                    <div class="msg-bubble msg-zara">
+                        <span class="emotion-tag">[softly]</span> Hey there! I am Zara. I am right here with you—feel free to talk to me about anything on your mind.
+                    </div>
+                </div>
+            </div>
+
+            <div class="panel-card">
+                <h3 style="font-size: 1rem; margin-bottom: 1rem; color: #E2E8F0;">Silk Voice Configuration</h3>
+                <div class="settings-grid">
+                    <div class="setting-item">
+                        <label>Voice Identity</label>
+                        <select id="voiceSelect">
+                            <option value="zara-expressive">Zara Expressive (Warm Indian English)</option>
+                            <option value="zara-hinglish">Zara Hinglish (Natural Bilingual Hindi-English)</option>
+                            <option value="zara-intimate">Zara Intimate (Calming Soothing Voice)</option>
+                            <option value="zara-playful">Zara Playful (Bright Animated Tone)</option>
+                            <option value="zara-storyteller">Zara Storyteller (Reflective Narrative)</option>
+                            <option value="zara-podcast">Zara Podcast (Steady Articulate)</option>
+                        </select>
+                    </div>
+                    <div class="setting-item">
+                        <label>Emotional State</label>
+                        <input type="text" id="moodDisplay" value="WARM" readonly style="color: #EC4899; font-weight: 600;" />
+                    </div>
+                </div>
+            </div>
+        </aside>
+    </main>
+
+    <!-- Mesh Memory Inspector Modal -->
+    <div class="modal-overlay" id="memoryModal">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3 style="font-size: 1.1rem; color: #F3F4F6;">🧠 Mesh Memory Inspector</h3>
+                <button id="closeMemoryBtn" style="background:none; border:none; color:#9CA3AF; font-size:1.4rem; cursor:pointer;">&times;</button>
+            </div>
+            <div class="modal-body" id="memoryListContainer">
+                <p style="color:#94A3B8; font-size:0.9rem;">No memories recorded yet. Tell Zara your name, job, or favorite things!</p>
+            </div>
+            <div class="modal-footer">
+                <button id="clearAllMemoriesBtn" style="background:#EF4444; border:none; color:white; padding:0.5rem 1rem; border-radius:8px; font-size:0.85rem; cursor:pointer;">Clear All Memories</button>
+                <span style="font-size:0.8rem; color:#94A3B8;">User Privacy Controlled</span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // DOM Elements
+        const voiceOrb = document.getElementById('voiceOrb');
+        const statusLabel = document.getElementById('statusLabel');
+        const micBtn = document.getElementById('micBtn');
+        const micBtnText = document.getElementById('micBtnText');
+        const textInput = document.getElementById('textInput');
+        const sendBtn = document.getElementById('sendBtn');
+        const transcriptFeed = document.getElementById('transcriptFeed');
+        const voiceSelect = document.getElementById('voiceSelect');
+        const moodDisplay = document.getElementById('moodDisplay');
+        const canvas = document.getElementById('waveformCanvas');
+        const canvasCtx = canvas.getContext('2d');
+        const openMemoryBtn = document.getElementById('openMemoryBtn');
+        const closeMemoryBtn = document.getElementById('closeMemoryBtn');
+        const memoryModal = document.getElementById('memoryModal');
+        const memoryListContainer = document.getElementById('memoryListContainer');
+        const memoryCountBadge = document.getElementById('memoryCountBadge');
+        const clearAllMemoriesBtn = document.getElementById('clearAllMemoriesBtn');
+        const contextTemporal = document.getElementById('contextTemporal');
+        const contextSubtext = document.getElementById('contextSubtext');
+
+        let isListening = false;
+        let recognition = null;
+        let currentAudio = null;
+
+        /**
+         * Initializes canvas waveform visualizer
+         * @danishansari-dev
+         * @returns void
+         */
+        function initVisualizer() {
+            canvas.width = canvas.offsetWidth;
+            canvas.height = canvas.offsetHeight;
+            drawIdleWaveform();
+        }
+
+        /**
+         * Draws ambient waveform waves when idle or speaking
+         * @danishansari-dev
+         * @returns void
+         */
+        function drawIdleWaveform() {
+            canvasCtx.clearRect(0, 0, canvas.width, canvas.height);
+            canvasCtx.beginPath();
+            canvasCtx.strokeStyle = 'rgba(168, 85, 247, 0.4)';
+            canvasCtx.lineWidth = 2;
+
+            const time = Date.now() * 0.003;
+            const amp = voiceOrb.classList.contains('speaking') ? 20 : 5;
+            for (let x = 0; x < canvas.width; x++) {
+                const y = canvas.height / 2 + Math.sin(x * 0.03 + time) * amp;
+                if (x === 0) canvasCtx.moveTo(x, y);
+                else canvasCtx.lineTo(x, y);
+            }
+            canvasCtx.stroke();
+            requestAnimationFrame(drawIdleWaveform);
+        }
+
+        /**
+         * Sanitizes untrusted strings to prevent DOM-based XSS attacks.
+         * Why this function exists:
+         * Prevents malicious payloads in chat messages or memory facts from executing arbitrary scripts.
+         * @danishansari-dev str - Raw input string
+         * @returns Sanitized string safe for HTML rendering
+         */
+        function escapeHtml(str) {
+            if (!str) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
+        /**
+         * Appends message to chat feed safely escaping HTML
+         * @danishansari-dev sender - 'user' or 'zara'
+         * @danishansari-dev text - Raw content
+         * @returns void
+         */
+        function appendMessage(sender, text) {
+            const bubble = document.createElement('div');
+            bubble.className = `msg-bubble msg-${sender === 'user' ? 'user' : 'zara'}`;
+            const safeText = escapeHtml(text);
+            const formatted = safeText.replace(/(\[[a-zA-Z0-9_\-\s]+\]|&lt;[a-zA-Z0-9_\-]+&gt;)/g, '<span class="emotion-tag">$1</span>');
+            bubble.innerHTML = formatted;
+            transcriptFeed.appendChild(bubble);
+            transcriptFeed.scrollTop = transcriptFeed.scrollHeight;
+        }
+
+        /**
+         * Sends chat request to Zara backend and plays synthesized voice response
+         * @danishansari-dev userText - The user prompt
+         * @returns Promise<void>
+         */
+        async function sendUserMessage(userText) {
+            if (!userText.trim()) return;
+
+            appendMessage('user', userText);
+            statusLabel.textContent = "Zara is thinking...";
+            voiceOrb.className = "voice-orb";
+
+            try {
+                const res = await fetch('/v1/agents/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        message: userText,
+                        voice: voiceSelect.value
+                    })
+                });
+                const data = await res.json();
+
+                appendMessage('zara', data.reply);
+                moodDisplay.value = data.mood.toUpperCase();
+
+                // Update Peek Context indicators
+                if (data.temporal) {
+                    contextTemporal.textContent = `🕒 ${data.temporal.period.toUpperCase()} MODE`;
+                }
+                if (data.subtext && data.subtext.subtext_detected) {
+                    contextSubtext.textContent = `⚡ Subtext: ${data.subtext.underlying_emotion}`;
+                } else {
+                    contextSubtext.textContent = `Direct conversation`;
+                }
+
+                // Refresh memory badge count
+                refreshMemoryList();
+
+                // Play received audio
+                if (data.audio_base64) {
+                    playVoiceAudio(data.audio_base64);
+                } else {
+                    statusLabel.textContent = "Zara is ready";
+                }
+            } catch (err) {
+                console.error("Failed to chat with Zara:", err);
+                statusLabel.textContent = "Connection error";
+            }
+        }
+
+        /**
+         * Plays base64 audio and animates voice orb during speech
+         * @danishansari-dev base64Audio - Encoded MP3
+         * @returns void
+         */
+        function playVoiceAudio(base64Audio) {
+            if (currentAudio) {
+                currentAudio.pause();
+            }
+
+            currentAudio = new Audio("data:audio/mp3;base64," + base64Audio);
+            statusLabel.textContent = "Zara is speaking...";
+            voiceOrb.className = "voice-orb speaking";
+
+            currentAudio.onended = () => {
+                voiceOrb.className = "voice-orb";
+                statusLabel.textContent = "Zara is listening";
+            };
+
+            currentAudio.play().catch(e => console.log("Audio autoplay prevented:", e));
+        }
+
+        /**
+         * Refreshes the Mesh Memory list from the backend
+         * @danishansari-dev
+         * @returns Promise<void>
+         */
+        async function refreshMemoryList() {
+            try {
+                const res = await fetch('/v1/memory');
+                const data = await res.json();
+                memoryCountBadge.textContent = data.count || 0;
+
+                if (!data.facts || data.facts.length === 0) {
+                    memoryListContainer.innerHTML = '<p style="color:#94A3B8; font-size:0.9rem;">No memories recorded yet. Tell Zara your name, location, job, or likes!</p>';
+                    return;
+                }
+
+                memoryListContainer.innerHTML = '';
+                data.facts.forEach(fact => {
+                    const row = document.createElement('div');
+                    row.className = 'memory-row';
+                    const safeCat = escapeHtml(fact.category);
+                    const safeSlot = escapeHtml(fact.key_slot);
+                    const safeVal = escapeHtml(fact.fact_value);
+                    const safeId = parseInt(fact.id, 10);
+                    row.innerHTML = `
+                        <div>
+                            <span class="memory-cat">${safeCat} • slot: ${safeSlot}</span>
+                            <span>${safeVal}</span>
+                        </div>
+                        <button class="btn-del" onclick="deleteMemoryFact(${safeId})">Delete</button>
+                    `;
+                    memoryListContainer.appendChild(row);
+                });
+            } catch (e) {
+                console.error("Failed to fetch memories:", e);
+            }
+        }
+
+        /**
+         * Deletes an individual memory fact
+         * @danishansari-dev factId - Memory row ID
+         * @returns Promise<void>
+         */
+        async function deleteMemoryFact(factId) {
+            try {
+                await fetch(`/v1/memory/${factId}`, { method: 'DELETE' });
+                refreshMemoryList();
+            } catch (e) {
+                console.error("Failed to delete memory:", e);
+            }
+        }
+
+        /**
+         * Sets up browser Web Speech API for voice input
+         * @danishansari-dev
+         * @returns void
+         */
+        function setupSpeechRecognition() {
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if (!SpeechRecognition) return;
+
+            recognition = new SpeechRecognition();
+            recognition.continuous = false;
+            recognition.interimResults = false;
+            recognition.lang = 'en-US';
+
+            recognition.onstart = () => {
+                isListening = true;
+                voiceOrb.className = "voice-orb listening";
+                statusLabel.textContent = "Listening to you...";
+                micBtn.classList.add('active');
+                micBtnText.textContent = "Listening...";
+            };
+
+            recognition.onresult = (event) => {
+                const transcript = event.results[0][0].transcript;
+                textInput.value = transcript;
+                sendUserMessage(transcript);
+            };
+
+            recognition.onerror = () => stopListening();
+            recognition.onend = () => stopListening();
+        }
+
+        function stopListening() {
+            isListening = false;
+            voiceOrb.className = "voice-orb";
+            statusLabel.textContent = "Zara is listening";
+            micBtn.classList.remove('active');
+            micBtnText.textContent = "Tap to Talk";
+        }
+
+        // Modal Listeners
+        openMemoryBtn.addEventListener('click', () => {
+            refreshMemoryList();
+            memoryModal.style.display = 'flex';
+        });
+
+        closeMemoryBtn.addEventListener('click', () => {
+            memoryModal.style.display = 'none';
+        });
+
+        clearAllMemoriesBtn.addEventListener('click', async () => {
+            if (confirm("Are you sure you want Zara to forget everything about you?")) {
+                await fetch('/v1/memory/clear', { method: 'POST' });
+                refreshMemoryList();
+            }
+        });
+
+        // Chat Listeners
+        micBtn.addEventListener('click', () => {
+            if (!recognition) {
+                alert("Speech recognition is not supported in this browser. Please use text input or Chrome/Edge.");
+                return;
+            }
+            if (isListening) recognition.stop();
+            else recognition.start();
+        });
+
+        sendBtn.addEventListener('click', () => {
+            const text = textInput.value;
+            textInput.value = '';
+            sendUserMessage(text);
+        });
+
+        textInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') sendBtn.click();
+        });
+
+        window.addEventListener('load', () => {
+            initVisualizer();
+            setupSpeechRecognition();
+            refreshMemoryList();
+        });
+    </script>
+</body>
+</html>
