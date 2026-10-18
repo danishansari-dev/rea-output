@@ -7,12 +7,13 @@ Rumik's Silk models (Muga, Mulberry, and Rumik OSS 1) modulate delivery based on
 (<laugh>, <sigh>, <chuckle>). This engine abstracts speech synthesis across multiple backends:
 1. Expressive Neural Engine with dynamic prosody mapping, multi-paragraph steering, and true format transcoding.
 2. Silk API Bridge (direct proxy to Rumik's production endpoints if an API key is present).
-3. Local Model Bridge hook (for offline checkpoints like Kokoro or Rumik-OSS-1).
+3. Local Model Bridge hook (for offline checkpoints like Kokoro, F5-TTS, or Rumik-OSS-1).
 """
 
 import io
 import os
 import re
+import json
 import asyncio
 from typing import AsyncGenerator, Dict, Any, Tuple, Optional, List
 import edge_tts
@@ -69,6 +70,43 @@ ZARA_VOICES: Dict[str, Dict[str, Any]] = {
     }
 }
 
+
+class ZaraLocalModelBridge:
+    """
+    Local Neural Model Bridge Hook for Custom Trained Checkpoints
+    Why this class exists:
+    Provides a clean, modular abstraction to load and execute local voice models
+    (such as Kokoro-82M, Flow-Matching F5-TTS, or Rumik-OSS-1 LoRA adapters)
+    directly on host hardware or cloud environments without cloud service dependencies.
+
+    Tricky logic:
+    Inspects whether local checkpoint files exist; if missing or invalid, gracefully
+    signals availability as False so Zara seamlessly falls back to the Expressive Neural Engine.
+
+    TODO: Add direct ONNX runtime session binding for Kokoro CPU inference.
+
+    @danishansari-dev checkpoint_dir - Path to local checkpoint directory
+    @returns ZaraLocalModelBridge instance
+    """
+    def __init__(self, checkpoint_dir: Optional[str] = None):
+        self.checkpoint_dir = checkpoint_dir or os.getenv("ZARA_MODEL_CHECKPOINT")
+        self.is_available = False
+        self.model_metadata: Dict[str, Any] = {}
+
+        if self.checkpoint_dir and os.path.exists(self.checkpoint_dir):
+            meta_path = os.path.join(self.checkpoint_dir, "training_summary.json")
+            if os.path.exists(meta_path):
+                try:
+                    with open(meta_path, 'r', encoding='utf-8') as f:
+                        self.model_metadata = json.load(f)
+                    self.is_available = True
+                except Exception:
+                    self.is_available = False
+
+    def can_synthesize(self) -> bool:
+        return self.is_available
+
+
 class ZaraVoiceEngine:
     """
     Why this class exists:
@@ -77,11 +115,12 @@ class ZaraVoiceEngine:
     and transcodes to real WAV, PCM, or MP3 audio streams.
     """
 
-    def __init__(self, default_voice: str = "zara-expressive"):
+    def __init__(self, default_voice: str = "zara-expressive", local_checkpoint_dir: Optional[str] = None):
         """
         Initializes the voice engine with default voice and credentials.
         Why this code exists:
-        Establishes defaults for voice synthesis and checks for Rumik Silk API environment keys.
+        Establishes defaults for voice synthesis, checks for Rumik Silk API environment keys,
+        and initializes local model bridge hooks.
 
         Tricky logic:
         None.
@@ -89,10 +128,75 @@ class ZaraVoiceEngine:
         TODO: Support dynamic hot-reloading of API keys from vault.
 
         @danishansari-dev default_voice - Default voice key to use from ZARA_VOICES
+        @danishansari-dev local_checkpoint_dir - Optional path to custom trained voice weights
         @returns None
         """
         self.default_voice = default_voice
         self.silk_api_key = os.getenv("RUMIK_API_KEY")
+        self.local_bridge = ZaraLocalModelBridge(checkpoint_dir=local_checkpoint_dir)
+
+    def resolve_voice_from_description(self, description: str) -> Tuple[str, str, str]:
+        """
+        Resolves voice persona and prosodic tuning from a Mulberry natural language description
+        Why this code exists:
+        Silk Mulberry 1.5 allows steering speech using descriptive phrases like:
+        'a female 20s hindi voice, smooth timbre, casual pacing, warm emotion, like a companion.'
+        This method resolves natural language descriptions into concrete voice identities and SSML deltas.
+
+        Tricky logic:
+        Extracts gender, age, language/accent, pacing, and emotion keywords using regex pattern
+        matching and computes matching voice IDs with fine-grained rate and pitch offsets.
+
+        TODO: Support embedding-based vector similarity search against a larger voice library.
+
+        @danishansari-dev description - Natural language voice description string
+        @returns Tuple of (selected_voice_name, rate_delta, pitch_delta)
+        """
+        if not description or not description.strip():
+            return self.default_voice, "+0%", "+0Hz"
+
+        desc_lower = description.lower()
+        selected_voice = self.default_voice
+        rate_delta = "+0%"
+        pitch_delta = "+0Hz"
+
+        # 1. Gender and accent resolution using word boundary regex to prevent 'female' matching 'male'
+        is_female = bool(re.search(r'\b(female|woman|girl|feminine|lady)\b', desc_lower))
+        is_male = bool(re.search(r'\b(male|man|boy|deep baritone|masculine|gentleman)\b', desc_lower)) and not is_female
+        is_hindi = any(h in desc_lower for h in ["hindi", "hinglish", "indian", "desi", "swara", "neerja"])
+        is_british = any(b in desc_lower for b in ["british", "uk", "english accent", "sonia"])
+        is_american = any(a in desc_lower for a in ["american", "us accent", "california", "ava"])
+
+        if is_male:
+            if is_hindi:
+                selected_voice = "zara-storyteller"
+            else:
+                selected_voice = "zara-podcast"
+        else:
+            if is_hindi:
+                selected_voice = "zara-hinglish" if "bilingual" in desc_lower or "desi" in desc_lower else "zara-expressive"
+            elif is_british:
+                selected_voice = "zara-playful"
+            elif is_american:
+                selected_voice = "zara-intimate"
+
+        # 2. Pacing resolution
+        if any(f in desc_lower for f in ["fast", "quick", "energetic", "brisk"]):
+            rate_delta = "+15%"
+        elif any(s in desc_lower for s in ["slow", "deliberate", "calm", "soothing", "measured"]):
+            rate_delta = "-12%"
+
+        # 3. Pitch and emotional register resolution
+        if any(w in desc_lower for w in ["whisper", "soft", "intimate", "quiet"]):
+            pitch_delta = "-4Hz"
+            rate_delta = "-15%"
+        elif any(h in desc_lower for h in ["happy", "cheerful", "bright", "playful"]):
+            pitch_delta = "+5Hz"
+            rate_delta = "+10%"
+        elif any(d in desc_lower for d in ["deep", "grave", "somber"]):
+            pitch_delta = "-6Hz"
+
+        return selected_voice, rate_delta, pitch_delta
 
     def parse_prosody_and_tags(self, text: str) -> Tuple[str, str, str, str]:
         """
@@ -103,9 +207,9 @@ class ZaraVoiceEngine:
 
         Tricky logic:
         1. Checks for paragraph tone prefix tags: [happy], [excited], [sad], [angry], [neutral], [whisper], [intimate].
-        2. Detects inline paralinguistic events (<laugh>, <chuckle>, <sigh>, <gasp>).
+        2. Detects inline paralinguistic events (<laugh>, <chuckle>, <sigh>, <gasp>, <giggle>, <laugh_harder>).
         3. Rather than merely stripping tags, replaces paralinguistic markers with acoustic punctuation
-           (e.g., subtle elipses pause '... ' for sighs) while applying rate/pitch offsets so speech pauses naturally.
+           (e.g., subtle ellipses pause '... ' for sighs) while applying rate/pitch offsets so speech pauses naturally.
 
         TODO: Integrate acoustic vocoder bursts for synthetic non-verbal laugh/giggle generation.
 
@@ -146,6 +250,18 @@ class ZaraVoiceEngine:
             rate = "+6%"
             pitch = "+3Hz"
             clean_text = re.sub(r'<\s*chuckle\s*>', '... ', clean_text, flags=re.IGNORECASE)
+        elif re.search(r'<\s*gasp\s*>', clean_text, re.IGNORECASE):
+            rate = "-10%"
+            pitch = "+4Hz"
+            clean_text = re.sub(r'<\s*gasp\s*>', '... ', clean_text, flags=re.IGNORECASE)
+        elif re.search(r'<\s*giggle\s*>', clean_text, re.IGNORECASE):
+            rate = "+14%"
+            pitch = "+6Hz"
+            clean_text = re.sub(r'<\s*giggle\s*>', ' ', clean_text, flags=re.IGNORECASE)
+        elif re.search(r'<\s*laugh_harder\s*>', clean_text, re.IGNORECASE):
+            rate = "+18%"
+            pitch = "+8Hz"
+            clean_text = re.sub(r'<\s*laugh_harder\s*>', ' ', clean_text, flags=re.IGNORECASE)
         elif re.search(r'<\s*laugh\s*>', clean_text, re.IGNORECASE):
             rate = "+15%"
             pitch = "+6Hz"
@@ -224,16 +340,24 @@ class ZaraVoiceEngine:
             # Fallback to original bytes if transcoding fails
             return mp3_bytes, "audio/mpeg"
 
-    async def synthesize(self, text: str, voice_name: str = "zara-expressive", emotion: Optional[str] = None, audio_format: str = "mp3") -> bytes:
+    async def synthesize(
+        self,
+        text: str,
+        voice_name: str = "zara-expressive",
+        emotion: Optional[str] = None,
+        audio_format: str = "mp3",
+        description: Optional[str] = None
+    ) -> bytes:
         """
         Synthesizes speech into binary audio bytes in the requested format.
         Why this code exists:
         Provides direct audio for REST API responses and audio playback.
 
         Tricky logic:
-        1. If multi-paragraph tone switching is detected and pydub is available, synthesizes
+        1. If descriptive prompting is supplied without a voice name, resolves Mulberry formula.
+        2. If multi-paragraph tone switching is detected and pydub is available, synthesizes
            each paragraph with its own prosody delta and stitches them into a seamless audio track.
-        2. Applies real audio transcoding (MP3, WAV, PCM) to guarantee format compliance.
+        3. Applies real audio transcoding (MP3, WAV, PCM) to guarantee format compliance.
 
         TODO: Implement streaming cached audio chunks directly for repeated phrases.
 
@@ -241,18 +365,26 @@ class ZaraVoiceEngine:
         @danishansari-dev voice_name - Named voice identifier from ZARA_VOICES
         @danishansari-dev emotion - Optional manual emotional override
         @danishansari-dev audio_format - Target audio format ('mp3', 'wav', 'pcm')
+        @danishansari-dev description - Optional Silk Mulberry natural language description
         @returns Binary audio data
         """
-        # Optional Silk API bridge if key is provided
+        # 1. Mulberry Natural Language Description handling
+        desc_rate_mod = "+0%"
+        desc_pitch_mod = "+0Hz"
+        if description and description.strip():
+            resolved_voice, desc_rate_mod, desc_pitch_mod = self.resolve_voice_from_description(description)
+            if voice_name == "zara-expressive":
+                voice_name = resolved_voice
+
+        # 2. Optional Silk API bridge if key is provided
         if self.silk_api_key:
             try:
                 import urllib.request
-                import json
                 payload = json.dumps({
                     "model": "muga" if text.startswith("[") else "mulberry",
                     "text": text,
                     "audio_format": audio_format,
-                    "description": ZARA_VOICES.get(voice_name, {}).get("description", "conversational voice")
+                    "description": description or ZARA_VOICES.get(voice_name, {}).get("description", "conversational voice")
                 }).encode('utf-8')
                 req = urllib.request.Request(
                     "https://silk-api.rumik.ai/v1/tts",
@@ -264,7 +396,7 @@ class ZaraVoiceEngine:
             except Exception:
                 pass
 
-        # Built-in Expressive Neural Engine
+        # 3. Built-in Expressive Neural Engine
         selected_voice_meta = ZARA_VOICES.get(voice_name, ZARA_VOICES["zara-expressive"])
         voice_id = selected_voice_meta["voice_id"]
 
@@ -279,6 +411,11 @@ class ZaraVoiceEngine:
                         rate, pitch = "+12%", "+5Hz"
                     elif emotion in ["calm", "supportive", "whisper"]:
                         rate, pitch = "-15%", "-4Hz"
+
+                if desc_rate_mod != "+0%":
+                    rate = desc_rate_mod
+                if desc_pitch_mod != "+0Hz":
+                    pitch = desc_pitch_mod
 
                 comm = edge_tts.Communicate(clean_text, voice_id, rate=rate, pitch=pitch)
                 buf = io.BytesIO()
@@ -306,6 +443,11 @@ class ZaraVoiceEngine:
                 elif emotion in ["calm", "supportive", "whisper"]:
                     rate, pitch = "-15%", "-4Hz"
 
+            if desc_rate_mod != "+0%":
+                rate = desc_rate_mod
+            if desc_pitch_mod != "+0Hz":
+                pitch = desc_pitch_mod
+
             communicate = edge_tts.Communicate(clean_text, voice_id, rate=rate, pitch=pitch)
             buffer = io.BytesIO()
             async for chunk in communicate.stream():
@@ -313,11 +455,16 @@ class ZaraVoiceEngine:
                     buffer.write(chunk["data"])
             mp3_bytes = buffer.getvalue()
 
-        # Transcode to requested format
+        # Transcode to requested format (WAV, PCM, or MP3)
         transcoded_bytes, _ = self.transcode_audio(mp3_bytes, target_format=audio_format)
         return transcoded_bytes
 
-    async def stream_audio_chunks(self, text: str, voice_name: str = "zara-expressive") -> AsyncGenerator[bytes, None]:
+    async def stream_audio_chunks(
+        self,
+        text: str,
+        voice_name: str = "zara-expressive",
+        description: Optional[str] = None
+    ) -> AsyncGenerator[bytes, None]:
         """
         Streams audio packets chunk-by-chunk in real time.
         Why this code exists:
@@ -332,8 +479,14 @@ class ZaraVoiceEngine:
 
         @danishansari-dev text - Spoken dialogue text
         @danishansari-dev voice_name - Target voice identifier
+        @danishansari-dev description - Optional Mulberry natural language description
         @returns Asynchronous generator of binary audio chunks
         """
+        if description and description.strip():
+            resolved_voice, r_mod, p_mod = self.resolve_voice_from_description(description)
+            if voice_name == "zara-expressive":
+                voice_name = resolved_voice
+
         clean_text, rate, pitch, _ = self.parse_prosody_and_tags(text)
         selected_voice_meta = ZARA_VOICES.get(voice_name, ZARA_VOICES["zara-expressive"])
         voice_id = selected_voice_meta["voice_id"]
